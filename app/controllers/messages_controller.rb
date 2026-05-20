@@ -26,16 +26,22 @@ class MessagesController < ApplicationController
     sse.close
   end
 
-  # ── Upload endpoint ───────────────────────────────────────────
+  # ── Ingest endpoint (audio = local filesystem path) ─────────────
   def create
-    audio = params[:audio]
-    name  = params[:listener_name]
+    audio_path = params[:audio].to_s.strip
+    name       = params[:listener_name]
 
-    return render json: { error: "Missing params" }, status: 422 unless audio && name.present?
+    return render json: { error: "Missing params" }, status: 422 unless audio_path.present? && name.present?
 
-    filename = "#{SecureRandom.hex(8)}#{File.extname(audio.audio_filename)}"
-    dest = Rails.root.join("tmp", "audio", filename)
-    FileUtils.cp(audio.tempfile.path, dest)
+    src = Pathname(File.expand_path(audio_path, Dir.home))
+    return render json: { error: "Audio file not found" }, status: 422 unless src.file?
+
+    dest_dir = Rails.root.join("tmp", "audio")
+    FileUtils.mkdir_p(dest_dir)
+
+    filename = "#{SecureRandom.hex(8)}#{src.extname}"
+    dest = dest_dir.join(filename)
+    FileUtils.cp(src, dest)
 
     msg = Message.create!(listener_name: name, audio_filename: filename, status: "pending")
 
@@ -53,6 +59,6 @@ class MessagesController < ApplicationController
     rescue
       dead << client
     end
-    CLIENTS.subtract(dead)
+    dead.each { |client| CLIENTS.delete(client) }
   end
 end
