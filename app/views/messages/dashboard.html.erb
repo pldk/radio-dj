@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <title>DJ Dashboard</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #0f0f0f; color: #f0f0f0; padding: 24px; }
+    h1 { font-size: 18px; font-weight: 600; margin-bottom: 20px; color: #fff; }
+    #messages { display: flex; flex-direction: column; gap: 10px; }
+
+    .msg {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      padding: 14px 16px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 6px;
+      align-items: start;
+      animation: slideIn 0.2s ease;
+    }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(-6px); } }
+
+    .msg .name  { font-weight: 600; font-size: 14px; color: #e0e0e0; }
+    .msg .time  { font-size: 11px; color: #555; text-align: right; }
+    .msg .text  { font-size: 13px; color: #aaa; margin-top: 6px; grid-column: 1 / -1; line-height: 1.5; }
+    .msg .text.pending { color: #555; font-style: italic; }
+
+    .badge {
+      font-size: 10px; font-weight: 600; padding: 2px 8px;
+      border-radius: 99px; text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .badge.pending { background: #2a2a00; color: #999900; }
+    .badge.done    { background: #002a10; color: #00cc66; }
+    .badge.error   { background: #2a0000; color: #cc3333; }
+
+    #status { font-size: 12px; color: #444; margin-bottom: 16px; }
+    #status.connected { color: #00cc66; }
+  </style>
+</head>
+<body>
+  <h1>DJ Dashboard</h1>
+  <p id="status">Verbinden...</p>
+  <div id="messages">
+    <% @messages.each do |msg| %>
+      <div class="msg" id="msg-<%= msg.id %>">
+        <span class="name"><%= msg.listener_name %></span>
+        <span class="time"><%= msg.created_at.strftime("%H:%M") %></span>
+        <span class="badge <%= msg.status %>"><%= msg.status %></span>
+        <p class="text <%= msg.status == 'pending' ? 'pending' : '' %>">
+          <%= msg.status == 'pending' ? 'Transcribing...' : msg.transcription %>
+        </p>
+      </div>
+    <% end %>
+  </div>
+
+  <script>
+    const es = new EventSource("/stream");
+    const status = document.getElementById("status");
+
+    es.addEventListener("open", () => {
+      status.textContent = "Live";
+      status.className = "connected";
+    });
+
+    es.addEventListener("message", e => {
+      const msg = JSON.parse(e.data);
+      upsert(msg);
+    });
+
+    es.addEventListener("error", () => {
+      status.textContent = "Verbinding verbroken — herverbinden...";
+      status.className = "";
+    });
+
+    function upsert(msg) {
+      const existing = document.getElementById("msg-" + msg.id);
+      const html = `
+        <span class="name">${msg.listener_name}</span>
+        <span class="time">${new Date(msg.created_at).toLocaleTimeString("nl", {hour:"2-digit", minute:"2-digit"})}</span>
+        <span class="badge ${msg.status}">${msg.status}</span>
+        <p class="text ${msg.status === 'pending' ? 'pending' : ''}">
+          ${msg.status === 'pending' ? 'Transcribing...' : msg.transcription ?? ''}
+        </p>`;
+
+      if (existing) {
+        existing.innerHTML = html;
+      } else {
+        const div = document.createElement("div");
+        div.className = "msg";
+        div.id = "msg-" + msg.id;
+        div.innerHTML = html;
+        document.getElementById("messages").prepend(div);
+      }
+    }
+  </script>
+</body>
+</html>
