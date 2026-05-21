@@ -20,30 +20,27 @@ class MessagesController < ApplicationController
     CLIENTS << sse
 
     loop { sleep 15; sse.write(nil, event: "ping") }
-  rescue IOError, ActionController::Live::ClientDisconnected
-  ensure
-    CLIENTS.delete(sse)
-    sse.close
-  end
+    rescue IOError, ActionController::Live::ClientDisconnected, SignalException
+    ensure
+      CLIENTS.delete(sse)
+      sse.close
+    end
 
   # ── Ingest endpoint (audio = local filesystem path) ─────────────
   def create
-    audio_path = params[:audio].to_s.strip
-    name       = params[:listener_name]
+    audio = params[:audio]
+    name  = params[:listener_name]
 
-    return render json: { error: "Missing params" }, status: 422 unless audio_path.present? && name.present?
+    return render json: { error: "Missing params" }, status: 422 unless audio && name.present?
 
-    src = Pathname(File.expand_path(audio_path, Dir.home))
-    return render json: { error: "Audio file not found" }, status: 422 unless src.file?
+    msg = Message.create!(listener_name: name, audio_filename: "pending", status: "pending")
 
-    dest_dir = Rails.root.join("tmp", "audio")
-    FileUtils.mkdir_p(dest_dir)
+    filename = "#{msg.id}.wav"
+    dest = AudioStorage::DIR.join(filename)
+    FileUtils.mkdir_p(AudioStorage::DIR)
+    FileUtils.cp(audio.tempfile.path, dest)
 
-    filename = "#{SecureRandom.hex(8)}#{src.extname}"
-    dest = dest_dir.join(filename)
-    FileUtils.cp(src, dest)
-
-    msg = Message.create!(listener_name: name, audio_filename: filename, status: "pending")
+    msg.update!(audio_filename: filename)
 
     self.class.broadcast(msg)
     TranscribeJob.perform_later(msg.id)
