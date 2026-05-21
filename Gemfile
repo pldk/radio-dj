@@ -43,7 +43,7 @@ group :development, :test do
   gem "brakeman", require: false
 
   # Dotenv for loading environment variables from .env file
-  gem "dotenv", require: false
+  gem "dotenv-rails", require: false
 
   # Omakase Ruby styling [https://github.com/rails/rubocop-rails-omakase/]
   gem "rubocop-rails-omakase", require: false
