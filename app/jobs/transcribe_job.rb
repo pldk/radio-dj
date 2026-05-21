@@ -9,7 +9,7 @@ class TranscribeJob < ApplicationJob
     response = client.audio.transcribe(
       parameters: { model: "whisper-1", file: File.open(audio_path, "rb") }
     )
-    
+
     msg.update!(transcription: response["text"], status: "done")
     MessagesController.broadcast(msg)
   rescue => e
